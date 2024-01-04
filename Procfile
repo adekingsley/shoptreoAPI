@@ -1,1 +1,4 @@
-web: gunicorn treo.wsgi:application --log-file -
+web: gunicorn treo.wsgi
+release: python manage.py makemigrations --noinput
+release: python manage.py collectstatics --noinput
+release: python manage.py migrate --noinput

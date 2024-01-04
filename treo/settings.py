@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-i4s2+w2*)jy$!k7_2!tlgq9#o&gouu!)_g8^2+d2p_qu(uampc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 AUTH_USER_MODEL = "treoapi.CustomUser"
 

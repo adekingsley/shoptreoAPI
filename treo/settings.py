@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -145,7 +146,7 @@ EMAIL_BACKEND = "anymail.backends.sendinblue.EmailBackend"
 DEFAULT_FROM_EMAIL = 'xmcideas@gmail.com'
 
 ANYMAIL = {
-    "SENDINBLUE_API_KEY": "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",
+    "SENDINBLUE_API_KEY": os.getenv("SENDINBLUE_SECRET"),
     "SEND_DEFAULTS": {
         "tags": ["app"]
     },
@@ -153,7 +154,7 @@ ANYMAIL = {
 }
 
 AWS_ACCESS_KEY_ID = 'AKIAQFS52HCC5JLNWWGX'
-AWS_SECRET_ACCESS_KEY = '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'
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET")
 AWS_STORAGE_BUCKET_NAME = 'boluxfoods'
 AWS_DEFAULT_ACL = 'public-read'
 AWS_S3_SIGNATURE_NAME = 'S3V4'

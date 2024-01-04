@@ -26,7 +26,7 @@ urlpatterns = [
          views.ProductDeleteView.as_view(), name='delete-product'),
     path('products/update/<int:pk>/',
          views.ProductUpdateView.as_view(), name='update-product'),
-    path('products/list/', views.ProductListView.as_view(),
+    path('products/list/all/', views.ProductListView.as_view(),
          name='list-all-products'),
     path('products/filter/<str:category_name>/',
          views.ProductCategoryFilterView.as_view(), name='filter-products-by-category'),

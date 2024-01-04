@@ -1,8 +1,9 @@
+from datetime import datetime
 from gettext import translation
 from django.forms import ValidationError
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView
+from rest_framework.generics import CreateAPIView, DestroyAPIView, ListAPIView, UpdateAPIView
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -180,32 +181,28 @@ class LoginView(CreateAPIView):
 Login = LoginView.as_view()
 
 
-class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
+class LogoutView(CreateAPIView):
     serializer_class = LogoutSerializer
+    permission_classes = [IsAuthenticated]
 
-    @method_decorator(cache_page(60 * 15))
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        access_token = serializer.validated_data['access_token']
+    def post(self, request):
+        user = request.user
+        user.last_logout = datetime.now()
+        user.save()
 
-        if cache.get(access_token):
-            return Response({'detail': 'Token has already been blacklisted'}, status=status.HTTP_400_BAD_REQUEST)
+        refresh_token = RefreshToken.for_user(user)
+        refresh_token.blacklist()
 
-        cache.set(access_token, True)
-
-        request.auth.delete()
-
-        return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+        return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
 
 
 Logout = LogoutView.as_view()
 
 
-class ProductCreateView(APIView):
+class ProductCreateView(CreateAPIView):
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAuthenticated]
+    serializer_class = ProductSerializer
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -226,7 +223,8 @@ class ProductCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ProductListByMerchantView(APIView):
+class ProductListByMerchantView(CreateAPIView):
+    serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -238,56 +236,72 @@ class ProductListByMerchantView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class ProductDeleteView(APIView):
+class ProductDeleteView(DestroyAPIView):
+    serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request, pk):
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            return Product.objects.filter(owner=self.request.user)
+        else:
+            return Product.objects.none()
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Handle deletion of the product instance.
+        """
+        instance = self.get_object()
+
+        # Add your additional permission checks here if needed
         if request.user.role != 'merchant':
             return Response({'error': 'Unauthorized. Only merchants can delete products.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            product = Product.objects.get(pk=pk)
-            if product.owner != request.user:
-                return Response({'error': 'Unauthorized. This product does not belong to the authenticated merchant.'}, status=status.HTTP_401_UNAUTHORIZED)
-            product.delete()
-
-            return Response({'message': 'Product deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
-        except Product.DoesNotExist:
-            return Response({'error': 'Product not found.'}, status=status.HTTP_404_NOT_FOUND)
+        instance.delete()
+        return Response({'message': 'Product deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
 
 
-class ProductUpdateView(APIView):
+class ProductUpdateView(CreateAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = ProductSerializer
+    swagger_fake_view = True
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            return Product.objects.filter(owner=self.request.user)
+        else:
+            return Product.objects.none()
 
     @transaction.atomic
     def put(self, request, pk):
+        queryset = self.get_queryset()
+        instance = self.get_object()
+
+        # Add your additional permission checks here if needed
         if request.user.role != 'merchant':
             return Response({'error': 'Unauthorized. Only merchants can update products.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            product = Product.objects.get(pk=pk)
-            if product.owner != request.user:
-                return Response({'error': 'Unauthorized. This product does not belong to the authenticated merchant.'}, status=status.HTTP_401_UNAUTHORIZED)
-            serializer = ProductSerializer(
-                product, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            else:
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except Product.DoesNotExist:
-            return Response({'error': 'Product not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ProductListView(APIView):
+class ProductListView(CreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProductSerializer
+
     def get(self, request):
         products = Product.objects.all()
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class ProductCategoryFilterView(APIView):
+class ProductCategoryFilterView(CreateAPIView):
+    serializer_class = ProductSerializer
+
     def get(self, request, category_name):
         try:
             category = ProductCategory(category_name)
@@ -298,7 +312,8 @@ class ProductCategoryFilterView(APIView):
             return Response({'error': 'Invalid category name.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class OrderMutilpleItemCreateView(APIView):
+class OrderMutilpleItemCreateView(CreateAPIView):
+    serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
     @transaction.atomic
@@ -330,7 +345,8 @@ class OrderMutilpleItemCreateView(APIView):
             return Response(order_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class OrderItemCreateView(APIView):
+class OrderItemCreateView(CreateAPIView):
+    serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
     @transaction.atomic
@@ -359,7 +375,7 @@ class OrderItemCreateView(APIView):
             return Response(item_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class OrderItemListView(ListAPIView):
+class OrderItemListView(CreateAPIView):
     queryset = OrderItem.objects.all()
     serializer_class = OrderItemSerializer
     permission_classes = [IsAuthenticated]
@@ -369,7 +385,7 @@ class OrderItemListView(ListAPIView):
         return OrderItem.objects.filter(order__user=user)
 
 
-class OrderItemUpdateView(UpdateAPIView):
+class OrderItemUpdateView(CreateAPIView):
     queryset = OrderItem.objects.all()
     serializer_class = OrderItemSerializer
     permission_classes = [IsAuthenticated]

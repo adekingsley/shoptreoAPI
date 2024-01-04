@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -25,6 +26,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = CustomUser
         fields = ['username', 'email', 'password',
@@ -73,13 +75,11 @@ class ProductSerializer(serializers.ModelSerializer):
 
         product = Product.objects.create(**validated_data)
 
-        # If an image was provided, upload it to S3 and set the URL
         if image_file:
             file_path = f'media/{image_file.name}'
             product.image = image_file
             product.save()
 
-            # Set the S3 URL
             s3_url = settings.MEDIA_URL + file_path
             product.image_URL = s3_url
             product.save()
